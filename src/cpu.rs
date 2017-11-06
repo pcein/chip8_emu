@@ -30,7 +30,8 @@ const SP_BOTTOM: usize = 0xe9e;
 type InsnPtr = fn(&mut CPU) -> ();
 
 struct CPU {
-    /// 4K Memory
+    /// 4K Memory. 2 byte objects are stored in big-endian
+    /// format.
     mem: [u8; MEM_SIZE],
     
     /// The 16 general purpose registers, 8 bits wide.
@@ -90,15 +91,15 @@ impl CPU {
     }    
 
     /// Copy 2 bytes from a usize value to top-of-stack.
+    /// Value stored on stack is in big endian format.
     fn copy_16bits_to_tos(&mut self, src: usize) {
         self.mem[self.sp] = ((src >> 8) & 0xffusize) as u8;
         self.mem[self.sp + 1] = (src & 0xffusize) as u8;        
     }
 
-    /// Copy 2 consecutive bytes from top-of-stack to the
-    /// usize object pointed to by `dest'.
-    fn copy_16bits_from_tos(&self, dest: &mut usize) {
-        *dest = ((self.mem[self.sp - 1] as usize) << 8) | (self.mem[self.sp] as usize);
+    /// Return the 2 byte value taken from top-of-stack.
+    fn get_16bits_from_tos(&self) -> usize {
+        ((self.mem[self.sp] as usize) << 8) | (self.mem[self.sp + 1] as usize)
     }
 
     /// Execute a jump instruction of the form "1nnn"
@@ -122,8 +123,17 @@ impl CPU {
         self.pc = target_address;
     }
 
+    fn ret(&mut self) {
+        self.pc = self.get_16bits_from_tos();
+        self.sp -= 2;
+    }
+
     /// Execute the instruction pointed to by the PC.
     fn execute_insn(&mut self) {
+        if (self.mem[self.pc] == 0x0) && (self.mem[self.pc + 1] == 0xee) {
+            self.ret();
+            return;
+        }
         let t = self.insn_leftmost_nibble();
         if (t >= 1) && (t <= 7) {
             let insn = INSN_LUT1.get(&t).expect("Bad Instruction");
