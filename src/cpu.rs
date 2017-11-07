@@ -60,6 +60,14 @@ impl CPU {
             sp: SP_BOTTOM,
         }
     }
+
+    /// Increment the program counter.
+    /// 
+    /// Each instruction is 2 bytes long, so 
+    /// incrementing by 1 will add 2 to the PC.
+    fn inc_pc(&mut self, n: usize) {
+        self.pc += 2 * n;
+    }
     
     /// Return the leftmost nibble of  a 16 bit
     /// instruction stored in big endian order. 
@@ -72,23 +80,20 @@ impl CPU {
     /// 
     /// If you have an instruction of the form "1nnn", you
     /// need to get "nnn", the 12 bit address.
-    fn get_12bit_address(&self) -> usize {
+    fn get_12bit_nnn(&self) -> usize {
         let address_high_nibble = self.mem[self.pc] & 0xf;
         let address_low_byte = self.mem[self.pc + 1];
         ((address_high_nibble as usize) << 8) + address_low_byte as usize    
 
     }
 
-    /// Return the least significant byte of a usize value.
-    fn lsb(x: usize) -> u8 {
-        (x & 0xffusize) as u8
+    /// Get the 8 bit constant encoded as part of the instruction.
+    /// 
+    /// If you have an instruction say "7xnn", this function 
+    /// returns "nn".
+    fn get_8bit_nn(&self) -> u8 {
+        self.mem[self.pc + 1] 
     }
-
-    /// Return the byte to the left of the least significant byte
-    /// of a usize value.
-    fn lsb_next(x: usize) -> u8 {
-        ((x >> 8) & 0xffusize) as u8
-    }    
 
     /// Copy 2 bytes from a usize value to top-of-stack.
     /// Value stored on stack is in big endian format.
@@ -102,10 +107,22 @@ impl CPU {
         ((self.mem[self.sp] as usize) << 8) | (self.mem[self.sp + 1] as usize)
     }
 
+    /// Return the lower nibble of the high byte of the 
+    /// instruction pointed to by PC.
+    fn nibble_x(&self) -> usize {
+        (self.mem[self.pc] & 0xf) as usize
+    }
+
+    /// Return the high nibble of the low byte of the
+    /// instruction pointed to by PC.
+    fn nibble_y(&self) -> usize {
+        ((self.mem[self.pc + 1] >> 4) & 0xf) as usize
+    }
+
     /// Execute a jump instruction of the form "1nnn"
     /// where nnn represents a memory address.
     fn jmp(&mut self) {
-        self.pc = self.get_12bit_address();
+        self.pc = self.get_12bit_nnn();
     }
 
     /// Call subroutine.
@@ -116,16 +133,67 @@ impl CPU {
     /// instruction to the new location on the stack. It then sets
     /// the program counter to "nnn".
     fn call(&mut self) {
-        let target_address = self.get_12bit_address();
+        let target_address = self.get_12bit_nnn();
         let next_insn_address = self.pc + 2;
         self.sp += 2;
         self.copy_16bits_to_tos(next_insn_address);
         self.pc = target_address;
     }
 
+    /// Subroutine return. Opcode "0x00ee".
     fn ret(&mut self) {
         self.pc = self.get_16bits_from_tos();
         self.sp -= 2;
+    }
+
+    /// Skip next instruction if v[x] == nn.
+    /// 
+    /// This instruction is of the form "3xnn".
+    fn skip_if_vx_eq_nn(&mut self) {
+        if self.v[self.nibble_x()] == self.get_8bit_nn() {
+            self.inc_pc(2); // skip next instruction
+            return;
+        }
+        self.inc_pc(1);
+    }
+
+    /// Skip next instruction if v[x] != nn.
+    /// 
+    /// This instruction is of the form "4xnn".
+    fn skip_if_vx_ne_nn(&mut self) {
+        if self.v[self.nibble_x()] != self.get_8bit_nn() {
+            self.inc_pc(2); // skip next instruction
+            return;
+        }
+        self.inc_pc(1);
+    }
+
+    /// Skip the next instruction if v[x] == v[y].
+    /// 
+    /// This instruction is of the form "5xy0".
+    fn skip_if_vx_eq_vy(&mut self) {
+        if self.v[self.nibble_x()] == self.v[self.nibble_y()] {
+            self.inc_pc(2); // skip next instruction
+            return;
+        }
+        self.inc_pc(1);
+    }
+
+    /// Set v[x] to nn.
+    /// 
+    /// This instruction is of the form "6xnn".
+    fn set_vx_to_nn(&mut self) {
+        self.v[self.nibble_x()] = self.get_8bit_nn();
+        self.inc_pc(1);
+    }
+
+    /// Add nn to v[x] without changing carry.
+    /// 
+    /// This instruction is of the form "7xnn"
+    fn add_nn_to_vx(&mut self) {
+        self.v[self.nibble_x()] = self.v[self.nibble_x()]
+                                      .wrapping_add(self.get_8bit_nn());
+        self.inc_pc(1);
     }
 
     /// Execute the instruction pointed to by the PC.
@@ -148,6 +216,11 @@ lazy_static! {
      static  ref  INSN_LUT1:HashMap<u8, InsnPtr> = hashmap! {
         1 => CPU::jmp as InsnPtr,
         2 => CPU::call as InsnPtr,
+        3 => CPU::skip_if_vx_eq_nn as InsnPtr,
+        4 => CPU::skip_if_vx_ne_nn as InsnPtr,
+        5 => CPU::skip_if_vx_eq_vy as InsnPtr,
+        6 => CPU::set_vx_to_nn as InsnPtr,
+        7 => CPU::add_nn_to_vx as InsnPtr,
     };
 }
 
