@@ -143,6 +143,7 @@ fn test_set_vx_to_nn() {
     
     c.execute_insn();
     assert_eq!(c.v[0xc], 0x2b);
+    assert_eq!(c.pc, 2);
 }
 
 #[test]
@@ -159,4 +160,205 @@ fn test_add_nn_to_vx() {
     c.execute_insn();
     assert_eq!(t, c.v[0xf]);
     assert_eq!(c.v[0x4], 4);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_assign_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x82b0
+    // v[2] = v[0xb]
+
+    c.v[2] = 10;
+    c.v[0xb] = 20;
+    c.mem[0] = 0x82;
+    c.mem[1] = 0xb0;
+
+    c.execute_insn();
+    assert_eq!(c.v[2], c.v[0xb]);    
+    assert_eq!(c.v[2], 20);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_assign_vx_or_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x85c1
+    // v[5] = v[5] | v[0xc]
+
+    c.v[5] = 0x8;
+    c.v[0xc] = 0x1;
+    c.mem[0] = 0x85;
+    c.mem[1] = 0xc1;
+
+    c.execute_insn();
+    assert_eq!(c.v[5], 0x9);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_assign_vx_and_vy_to_vx() {
+    let mut c = CPU::new();
+    // Insruction: 0x85c2
+    // v[5] = v[5] & v[0xc] 
+
+    c.v[5] = 0x8;
+    c.v[0xc] = 0x1;
+    c.mem[0] = 0x85;
+    c.mem[1] = 0xc2;
+
+    c.execute_insn();
+    assert_eq!(c.v[5], 0);
+    assert_eq!(c.pc, 2);   
+}
+
+#[test]
+fn test_assign_vx_xor_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x85c3
+    // v[5] = v[5] ^ v[0xc]
+
+    c.v[5] = 0x9;
+    c.v[0xc] = 0x9;
+    c.mem[0] = 0x85;
+    c.mem[1] = 0xc3;
+
+    c.execute_insn();
+    assert_eq!(c.v[5], 0);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test1_assign_vx_plus_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x85c4
+    // v[5] = v[5] + v[0xc]
+
+    c.v[5] = 255;
+    c.v[0xc] = 10; // Generate overflow
+    c.mem[0] = 0x85;
+    c.mem[1] = 0xc4;
+
+    c.execute_insn();
+    assert_eq!(c.v[5], 9);
+    assert_eq!(c.v[0xf], 1);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test2_assign_vx_plus_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x85c4
+    // v[5] = v[5] + v[0xc]
+
+    c.v[5] = 245;
+    c.v[0xc] = 10; // No overflow
+    c.mem[0] = 0x85;
+    c.mem[1] = 0xc4;
+
+    c.execute_insn();
+    assert_eq!(c.v[5], 255);
+    assert_eq!(c.v[0xf], 0);
+    assert_eq!(c.pc, 2);
+}
+
+#[test] 
+fn test1_assign_vx_minus_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x89d5
+    // v[9] = v[9] - v[0xd]
+
+    c.v[9] = 100;
+    c.v[0xd] = 90; // No borrow
+    c.mem[0] = 0x89;
+    c.mem[1] = 0xd5;
+
+    c.execute_insn();
+    assert_eq!(c.v[9], 10); 
+    assert_eq!(c.v[0xf], 1); 
+    assert_eq!(c.pc, 2);
+}
+
+#[test] 
+fn test2_assign_vx_minus_vy_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x89d5
+    // v[9] = v[9] - v[0xd]
+
+    c.v[9] = 100;
+    c.v[0xd] = 110; // Borrow
+    c.mem[0] = 0x89;
+    c.mem[1] = 0xd5;
+
+    c.execute_insn();
+    assert_eq!(c.v[9], 246); 
+    assert_eq!(c.v[0xf], 0); 
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_shr_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x8706
+    // v[7] = v[7] >> 1
+
+    c.v[7] = 3;
+    c.mem[0] = 0x87;
+    c.mem[1] = 0x06;
+
+    c.execute_insn();
+    assert_eq!(c.v[7], 1);
+    assert_eq!(c.v[0xf], 1);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test1_assign_vy_minus_vx_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x89e7
+    // v[9] = v[0xe] - v[0x9]
+
+    c.v[9] = 10;
+    c.v[0xe] = 13;
+    c.mem[0] = 0x89;
+    c.mem[1] = 0xe7;
+
+    c.execute_insn();
+    assert_eq!(c.v[9], 3);
+    assert_eq!(c.v[0xf], 1);
+    assert_eq!(c.pc, 2);
+
+}
+
+#[test]
+fn test2_assign_vy_minus_vx_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x89e7
+    // v[9] = v[0xe] - v[0x9]
+
+    c.v[9] = 13;
+    c.v[0xe] = 10;
+    c.mem[0] = 0x89;
+    c.mem[1] = 0xe7;
+
+    c.execute_insn();
+    assert_eq!(c.v[9], 253);
+    assert_eq!(c.v[0xf], 0);
+    assert_eq!(c.pc, 2);
+
+}
+
+#[test]
+fn test_shl_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0x870e
+    // v[7] = v[7] << 1
+
+    c.v[7] = 2;
+    c.mem[0] = 0x87;
+    c.mem[1] = 0x0e;
+
+    c.execute_insn();
+    assert_eq!(c.v[7], 4);
+    assert_eq!(c.pc, 2);
 }

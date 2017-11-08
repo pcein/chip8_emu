@@ -69,18 +69,12 @@ impl CPU {
         self.pc += 2 * n;
     }
     
-    /// Return the leftmost nibble of  a 16 bit
-    /// instruction stored in big endian order. 
-    fn insn_leftmost_nibble(&self) -> u8 {
-        (self.mem[self.pc] >> 4) & 0xf
-    }
-
     /// Get the 12 bit memory address encoded as part of 
     /// the instruction.
     /// 
     /// If you have an instruction of the form "1nnn", you
     /// need to get "nnn", the 12 bit address.
-    fn get_12bit_nnn(&self) -> usize {
+    fn get_address(&self) -> usize {
         let address_high_nibble = self.mem[self.pc] & 0xf;
         let address_low_byte = self.mem[self.pc + 1];
         ((address_high_nibble as usize) << 8) + address_low_byte as usize    
@@ -91,7 +85,7 @@ impl CPU {
     /// 
     /// If you have an instruction say "7xnn", this function 
     /// returns "nn".
-    fn get_8bit_nn(&self) -> u8 {
+    fn get_constant(&self) -> u8 {
         self.mem[self.pc + 1] 
     }
 
@@ -122,7 +116,7 @@ impl CPU {
     /// Execute a jump instruction of the form "1nnn"
     /// where nnn represents a memory address.
     fn jmp(&mut self) {
-        self.pc = self.get_12bit_nnn();
+        self.pc = self.get_address();
     }
 
     /// Call subroutine.
@@ -133,7 +127,7 @@ impl CPU {
     /// instruction to the new location on the stack. It then sets
     /// the program counter to "nnn".
     fn call(&mut self) {
-        let target_address = self.get_12bit_nnn();
+        let target_address = self.get_address();
         let next_insn_address = self.pc + 2;
         self.sp += 2;
         self.copy_16bits_to_tos(next_insn_address);
@@ -150,7 +144,7 @@ impl CPU {
     /// 
     /// This instruction is of the form "3xnn".
     fn skip_if_vx_eq_nn(&mut self) {
-        if self.v[self.nibble_x()] == self.get_8bit_nn() {
+        if self.v[self.nibble_x()] == self.get_constant() {
             self.inc_pc(2); // skip next instruction
             return;
         }
@@ -161,7 +155,7 @@ impl CPU {
     /// 
     /// This instruction is of the form "4xnn".
     fn skip_if_vx_ne_nn(&mut self) {
-        if self.v[self.nibble_x()] != self.get_8bit_nn() {
+        if self.v[self.nibble_x()] != self.get_constant() {
             self.inc_pc(2); // skip next instruction
             return;
         }
@@ -183,7 +177,7 @@ impl CPU {
     /// 
     /// This instruction is of the form "6xnn".
     fn set_vx_to_nn(&mut self) {
-        self.v[self.nibble_x()] = self.get_8bit_nn();
+        self.v[self.nibble_x()] = self.get_constant();
         self.inc_pc(1);
     }
 
@@ -192,9 +186,125 @@ impl CPU {
     /// This instruction is of the form "7xnn"
     fn add_nn_to_vx(&mut self) {
         self.v[self.nibble_x()] = self.v[self.nibble_x()]
-                                      .wrapping_add(self.get_8bit_nn());
+                                      .wrapping_add(self.get_constant());
         self.inc_pc(1);
     }
+
+    /// Assign v[y] to v[x]
+    /// 
+    /// This instruction is of the form "8xy0"
+    fn assign_vy_to_vx(&mut self) {
+        self.v[self.nibble_x()] = self.v[self.nibble_y()];
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] | v[y]
+    /// 
+    /// This instruction is of the form "8xy1"
+    fn assign_vx_or_vy_to_vx(&mut self) {
+        self.v[self.nibble_x()] = self.v[self.nibble_x()] | self.v[self.nibble_y()];
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] & v[y]
+    /// 
+    /// This instruction is of the form "8xy2"
+    fn assign_vx_and_vy_to_vx(&mut self) {
+        self.v[self.nibble_x()] = self.v[self.nibble_x()] & self.v[self.nibble_y()];
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] ^ v[y]
+    /// 
+    /// This instruction is of the form "8xy3"
+    fn assign_vx_xor_vy_to_vx(&mut self) {
+        self.v[self.nibble_x()] = self.v[self.nibble_x()] ^ self.v[self.nibble_y()];
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] + v[y]. v[f] set to 1 if there is a carry,
+    /// otherwise set to 0.
+    /// 
+    /// This instruction is of the form "8xy4"
+    fn assign_vx_plus_vy_to_vx(&mut self) {
+        let r = u16::from(self.v[self.nibble_x()]) + u16::from(self.v[self.nibble_y()]);
+        self.v[0xf] = 0;
+        if r > 255 {
+            self.v[self.nibble_x()] = (r - 256u16) as u8;
+            self.v[0xf] = 1; // carry flag set to 1
+        } else {
+            self.v[self.nibble_x()] = r as u8;
+        }
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] - v[y].
+    /// v[f] is set to 1 if there is NO borrow. Set to 0 otherwise.
+    /// 
+    /// This instruction has the form "8xy5".
+    fn assign_vx_minus_vy_to_vx(&mut self) {
+        let (vx, vy) = (self.v[self.nibble_x()], self.v[self.nibble_y()]);
+        if vx >= vy { // No borrow
+            self.v[self.nibble_x()] = vx - vy;
+            self.v[0xf] = 1;
+        } else {
+            self.v[self.nibble_x()] = vx.wrapping_sub(vy);
+            self.v[0xf] = 0;
+        }
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] >> 1.
+    /// Before shifting, the least significant bit of v[x]
+    /// is copied to v[f].
+    /// 
+    /// This instruction is of the form: "8x06"
+    /// 
+    /// Note: There is some difference between this implementation
+    /// and the instruction described in the Wikipedia page. This
+    /// implementation follows the Python version available here:
+    /// <https://github.com/craigthomas/Chip8Python/blob/master/chip8/cpu.py>
+    fn shr_vx(&mut self) {
+        let vx = self.v[self.nibble_x()];
+        self.v[0xf] = vx & 1;
+        self.v[self.nibble_x()] = vx >> 1;
+        self.inc_pc(1);
+    }
+    
+    /// v[x] = v[y] - v[x]. Set v[f] to 1 if there is NO borrow,
+    /// otherwise set to 0.
+    /// 
+    /// This instruction is of the form: "8xy7"
+    fn assign_vy_minus_vx_to_vx(&mut self) {
+        let (vx, vy) = (self.v[self.nibble_x()], self.v[self.nibble_y()]);
+        if vy >= vx { // No borrow 
+            self.v[self.nibble_x()] = vy - vx;
+            self.v[0xf] = 1;
+        } else {
+            self.v[self.nibble_x()] = vy.wrapping_sub(vx);
+            self.v[0xf] = 0;
+        }
+        self.inc_pc(1);
+    }
+
+    /// v[x] = v[x] << 1.
+    /// Before shifting, the most significant bit of v[x] is
+    /// copied to v[f].
+    /// 
+    /// This instruction has the form: "8x0e".
+    /// 
+    /// Note: Similar to the "shift right" instruction, this
+    /// instruction too is implemented differently from what
+    /// is given in the Wikipedia page. This implementation is
+    /// based on the Python project whose URL is given in the
+    /// comment to the "shr_vx" function.
+    fn shl_vx(&mut self) {
+        let vx = self.v[self.nibble_x()];
+        self.v[0xf] = (vx >> 7) & 1; 
+        self.v[self.nibble_x()] = vx << 1;
+        self.inc_pc(1);
+    }
+
 
     /// Execute the instruction pointed to by the PC.
     fn execute_insn(&mut self) {
@@ -202,15 +312,24 @@ impl CPU {
             self.ret();
             return;
         }
-        let t = self.insn_leftmost_nibble();
+        // Get the leftmost nibble
+        let t = (self.mem[self.pc] >> 4) & 0xf;
         if (t >= 1) && (t <= 7) {
             let insn = INSN_LUT1.get(&t).expect("Bad Instruction");
-            insn(self);            
+            insn(self);
+            return;            
         }         
+        if t == 8 {
+            // Get the rightmost nibble
+            let t = self.mem[self.pc + 1] & 0xf;
+            let insn = INSN_LUT2.get(&t).expect("Bad Instruction");
+            insn(self);
+            return;
+        }
     }
 } 
 
-/// INSN_LUT1 is an instruction lookup table; used for decoding the 
+/// INSN_LUT1 is an instruction lookup table; used for decoding an 
 /// instruction based on its leftmost nibble.
 lazy_static! {
      static  ref  INSN_LUT1:HashMap<u8, InsnPtr> = hashmap! {
@@ -224,9 +343,25 @@ lazy_static! {
     };
 }
 
+/// There are multiple instructions whose opcodes start with
+/// the first nibble equal to 8. These instructions are uniquely
+/// identified based on the value of their last nibble. INSN_LUT2
+/// is used to perform this identification.
+lazy_static! {
+    static ref INSN_LUT2: HashMap<u8, InsnPtr> = hashmap! {
+        0 => CPU::assign_vy_to_vx as InsnPtr,
+        1 => CPU::assign_vx_or_vy_to_vx as InsnPtr,
+        2 => CPU::assign_vx_and_vy_to_vx as InsnPtr,
+        3 => CPU::assign_vx_xor_vy_to_vx as InsnPtr,
+        4 => CPU::assign_vx_plus_vy_to_vx as InsnPtr,
+        5 => CPU::assign_vx_minus_vy_to_vx as InsnPtr,
+        6 => CPU::shr_vx as InsnPtr,
+        7 => CPU::assign_vy_minus_vx_to_vx as InsnPtr,
+        0xe => CPU::shl_vx as InsnPtr,
+    };
+}
+
 #[cfg(test)]
 #[path="./cpu_test.rs"]
 mod cpu_test;
     
-
-
