@@ -490,3 +490,24 @@ fn test_store_v0_to_vx_to_mem() {
     }
     assert_eq!(c.pc, 2);
 }
+
+#[test]
+fn test_fill_v0_to_vx_from_mem() {
+    let mut c = CPU::new();
+    // Instruction: 0xff65
+    // Store from c.mem[i], c.mem[i+1], ..., c.mem[i+0xf]
+    // to c.v[0], c.v[1], ..., c.v[0xf]
+
+    c.i = 20;
+    for n in 0..0x10usize {
+        c.mem[c.i + n] = n as u8;
+    }
+    c.mem[0] = 0xff;
+    c.mem[1] = 0x65;
+
+    c.execute_insn();
+    for i in 0..0x10usize {
+        assert_eq!(c.v[i], i as u8);
+    }
+    assert_eq!(c.pc, 2);
+}

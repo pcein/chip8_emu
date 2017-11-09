@@ -306,6 +306,9 @@ impl CPU {
         self.inc_pc(1);
     }
 
+    /// Skip the next instruction if v[x] not equal to v[y].
+    /// 
+    /// This instruction has the form: "9xy0".
     fn skip_if_vx_ne_vy(&mut self) {
         if self.v[self.nibble_x()] != self.v[self.nibble_y()] {
             self.inc_pc(2);
@@ -377,6 +380,18 @@ impl CPU {
     fn store_v0_to_vx_to_mem(&mut self) {
         for n in 0..self.nibble_x() + 1 {
             self.mem[self.i + n] = self.v[n];
+        }
+        self.inc_pc(1);
+    }
+
+    /// Copy the contents of memory locations starting from
+    /// the one whose address is stored in the "i" register
+    /// to registers v[0], v[1], ..., v[x].
+    /// 
+    /// This instruction has the form: 0xfx65.
+    fn fill_v0_to_vx_from_mem(&mut self) {
+        for n in 0..self.nibble_x() + 1 {
+            self.v[n] = self.mem[self.i + n];
         }
         self.inc_pc(1);
     }
@@ -455,6 +470,7 @@ lazy_static! {
         0x1e => CPU::assign_i_plus_vx_to_i as InsnPtr,
         0x33 => CPU::store_bcd_of_vx_to_mem as InsnPtr,
         0x55 => CPU::store_v0_to_vx_to_mem as InsnPtr,
+        0x65 => CPU::fill_v0_to_vx_from_mem as InsnPtr,
     };
 }
 
