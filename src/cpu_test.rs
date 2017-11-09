@@ -362,3 +362,77 @@ fn test_shl_vx() {
     assert_eq!(c.v[7], 4);
     assert_eq!(c.pc, 2);
 }
+
+#[test]
+fn test1_skip_if_vx_ne_vy() {
+    let mut c = CPU::new();
+    // Instruction: 0x9560
+    // skip if v[5] != v[6]
+
+    c.v[5] = 1;
+    c.v[6] = 1;
+    c.mem[0] = 0x95;
+    c.mem[1] = 0x60;
+    
+    c.execute_insn();
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test2_skip_if_vx_ne_vy() {
+    let mut c = CPU::new();
+    // Instruction: 0x9560
+    // skip if v[5] != v[6]
+
+    c.v[5] = 1;
+    c.v[6] = 2;
+    c.mem[0] = 0x95;
+    c.mem[1] = 0x60;
+    
+    c.execute_insn();
+    assert_eq!(c.pc, 4);
+}
+
+#[test]
+fn test_assign_address_to_ireg() {
+    let mut c = CPU::new();
+    // Instruction: 0xa123
+    // i = 0x123
+
+    c.mem[0] = 0xa1;
+    c.mem[1] = 0x23;
+
+    c.execute_insn();
+    assert_eq!(c.i, 0x123);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_jmp_to_address_plus_v0() {
+    let mut c = CPU::new();
+    // Instruction: 0xb123
+    // pc = 0x123 + v[0]
+
+    c.v[0] = 0x3;
+    c.mem[0] = 0xb1;
+    c.mem[1] = 0x23;
+
+    c.execute_insn();
+    assert_eq!(c.pc, 0x126);
+}
+
+#[test]
+fn test_assign_rand_bitand_const_to_vx() {
+    let mut c = CPU::new();
+    // Instruction: 0xc75a
+    // v[7] = rand() & 0x5a
+    // When the test code is being executed,
+    // value of rand() will be 0xff.
+
+    c.mem[0] = 0xc7;
+    c.mem[1] = 0x5a;
+
+    c.execute_insn();
+    assert_eq!(c.v[7], 0x5a);
+    assert_eq!(c.pc, 2);
+}

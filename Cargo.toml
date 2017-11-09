@@ -6,3 +6,5 @@ authors = ["Pramode <mail@pramode.in>"]
 [dependencies]
 maplit = "1.0.0"
 lazy_static = "0.2.9"
+rand = "0.3.18"
+

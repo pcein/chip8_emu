@@ -5,6 +5,7 @@
 /// (2) <https://en.wikipedia.org/wiki/CHIP-8>
 
 use std::collections::HashMap;
+use rand;
 
 /// CHIP-8 Memory is 4K bytes in size
 const MEM_SIZE: usize = 4096;
@@ -38,7 +39,7 @@ struct CPU {
     v: [u8; NUM_REGS],
 
     /// The address register.
-    i: u16,
+    i: usize,
 
     /// The Program Counter, not directly accessible
     /// from CHIP-8 programs.
@@ -62,7 +63,7 @@ impl CPU {
     }
 
     /// Increment the program counter.
-    /// 
+    /// download?logged_out=1&lang=en
     /// Each instruction is 2 bytes long, so 
     /// incrementing by 1 will add 2 to the PC.
     fn inc_pc(&mut self, n: usize) {
@@ -305,6 +306,43 @@ impl CPU {
         self.inc_pc(1);
     }
 
+    fn skip_if_vx_ne_vy(&mut self) {
+        if self.v[self.nibble_x()] != self.v[self.nibble_y()] {
+            self.inc_pc(2);
+        } else {
+            self.inc_pc(1);
+        }
+    }
+
+    /// Assign the 12 bit address encoded as part of the
+    /// instruction to the i register.
+    /// 
+    /// This instruction has the form "annn".
+    fn assign_address_to_ireg(&mut self) {
+        self.i = self.get_address();
+        self.inc_pc(1);
+    }
+
+    /// Get the 12 bit address encoded as part of the 
+    /// instruction, add v[0] to it and jump to that
+    /// location.
+    /// 
+    /// This instruction has the form: "bnnn".
+    fn jmp_to_address_plus_v0(&mut self) {
+        self.pc = usize::from(self.v[0]) + self.get_address();
+    }
+
+    /// v[x] = rand() & nn
+    /// Assign to v[x] the result obtained by doing a
+    /// bitwise and of the constant encoded in the 
+    /// instruction with a 1 byte random number.
+    /// 
+    /// This instruction has the form: "cxnn".
+    fn assign_rand_bitand_const_to_vx(&mut self) {
+        let randval = if cfg!(test) { 0xff } else { rand::random::<u8>() };
+        self.v[self.nibble_x()] = self.get_constant() & randval;
+        self.inc_pc(1);
+    }
 
     /// Execute the instruction pointed to by the PC.
     fn execute_insn(&mut self) {
@@ -314,7 +352,7 @@ impl CPU {
         }
         // Get the leftmost nibble
         let t = (self.mem[self.pc] >> 4) & 0xf;
-        if (t >= 1) && (t <= 7) {
+        if ((t >= 1) && (t <= 7)) || ((t >= 9) && (t <= 0xd)) {
             let insn = INSN_LUT1.get(&t).expect("Bad Instruction");
             insn(self);
             return;            
@@ -340,6 +378,10 @@ lazy_static! {
         5 => CPU::skip_if_vx_eq_vy as InsnPtr,
         6 => CPU::set_vx_to_nn as InsnPtr,
         7 => CPU::add_nn_to_vx as InsnPtr,
+        9 => CPU::skip_if_vx_ne_vy as InsnPtr,
+        0xa => CPU::assign_address_to_ireg as InsnPtr,
+        0xb => CPU::jmp_to_address_plus_v0 as InsnPtr,
+        0xc => CPU::assign_rand_bitand_const_to_vx as InsnPtr,
     };
 }
 
