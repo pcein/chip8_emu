@@ -344,6 +344,43 @@ impl CPU {
         self.inc_pc(1);
     }
 
+    /// i += v[x]
+    /// Assign to i the sum of v[x] and i
+    /// 
+    /// This instruction has the form: "fx1e"
+    fn assign_i_plus_vx_to_i(&mut self) {
+        self.i += usize::from(self.v[self.nibble_x()]);
+        self.inc_pc(1);
+    }
+
+    /// Store the three digits obtained by converting v[x]
+    /// to BCD at three consecutive locations starting from
+    /// the one whose address is stored in the "i" register.
+    /// The most significant BCD digit is stored at the lowest
+    /// memory address.
+    /// 
+    /// This instruction has the form: "0xfx33".
+    fn store_bcd_of_vx_to_mem(&mut self) {
+        let vx = self.v[self.nibble_x()];
+        let (a, b, c) = (vx / 100, (vx / 10) % 10, vx % 10);
+        self.mem[self.i] = a; // most significant digit at lowest address
+        self.mem[self.i + 1] = b;
+        self.mem[self.i + 2] = c;
+        self.inc_pc(1);
+    }
+
+    /// Store content of v[0] to v[x] (including v[x])
+    /// to memory locations starting from the one whose
+    /// address is stored in the "i" register.
+    /// 
+    /// This instruction has the form: "0xfx55".
+    fn store_v0_to_vx_to_mem(&mut self) {
+        for n in 0..self.nibble_x() + 1 {
+            self.mem[self.i + n] = self.v[n];
+        }
+        self.inc_pc(1);
+    }
+
     /// Execute the instruction pointed to by the PC.
     fn execute_insn(&mut self) {
         if (self.mem[self.pc] == 0x0) && (self.mem[self.pc + 1] == 0xee) {
@@ -361,6 +398,12 @@ impl CPU {
             // Get the rightmost nibble
             let t = self.mem[self.pc + 1] & 0xf;
             let insn = INSN_LUT2.get(&t).expect("Bad Instruction");
+            insn(self);
+            return;
+        }
+        if t == 0xf {
+            let t = self.mem[self.pc + 1];
+            let insn = INSN_LUT3.get(&t).expect("Bad Instruction");
             insn(self);
             return;
         }
@@ -386,8 +429,8 @@ lazy_static! {
 }
 
 /// There are multiple instructions whose opcodes start with
-/// the first nibble equal to 8. These instructions are uniquely
-/// identified based on the value of their last nibble. INSN_LUT2
+/// the leftmost nibble equal to 8. These instructions are uniquely
+/// identified based on the value of their rightmost nibble. INSN_LUT2
 /// is used to perform this identification.
 lazy_static! {
     static ref INSN_LUT2: HashMap<u8, InsnPtr> = hashmap! {
@@ -400,6 +443,18 @@ lazy_static! {
         6 => CPU::shr_vx as InsnPtr,
         7 => CPU::assign_vy_minus_vx_to_vx as InsnPtr,
         0xe => CPU::shl_vx as InsnPtr,
+    };
+}
+
+/// There are multiple instructions whose opcodes start
+/// with the leftmost nibble equal to 0xf. INSN_LUT3 identifies
+/// these instructions based on the value of their least 
+/// significant byte. 
+lazy_static! {
+    static ref INSN_LUT3: HashMap<u8, InsnPtr> = hashmap! {
+        0x1e => CPU::assign_i_plus_vx_to_i as InsnPtr,
+        0x33 => CPU::store_bcd_of_vx_to_mem as InsnPtr,
+        0x55 => CPU::store_v0_to_vx_to_mem as InsnPtr,
     };
 }
 

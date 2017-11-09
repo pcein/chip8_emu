@@ -436,3 +436,57 @@ fn test_assign_rand_bitand_const_to_vx() {
     assert_eq!(c.v[7], 0x5a);
     assert_eq!(c.pc, 2);
 }
+
+#[test]
+fn test_assign_i_plus_vx_to_i() {
+    let mut c = CPU::new();
+    // Instruction: 0xf31e
+    // i += v[3]
+
+    c.i = 4;
+    c.v[3] = 10;
+    c.mem[0] = 0xf3;
+    c.mem[1] = 0x1e;
+
+    c.execute_insn();
+    assert_eq!(c.i, 14);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_store_bcd_of_vx_to_mem() {
+    let mut c = CPU::new();
+    // Instruction: 0xf133
+    
+    c.i = 6;
+    c.v[1] = 123;
+    c.mem[0] = 0xf1;
+    c.mem[1] = 0x33;
+
+    c.execute_insn();
+    assert_eq!(c.mem[6], 1);
+    assert_eq!(c.mem[7], 2);
+    assert_eq!(c.mem[8], 3);
+    assert_eq!(c.pc, 2);
+}
+
+#[test]
+fn test_store_v0_to_vx_to_mem() {
+    let mut c = CPU::new();
+    // Instruction: 0xff55
+    // Store v[0] to v[0xf] to mem,
+    // starting from c.mem[c.i]
+
+    for i in 0..0x10usize {
+        c.v[i] = i as u8;
+    }
+    c.i = 0;
+    c.mem[0] = 0xff;
+    c.mem[1] = 0x55;
+
+    c.execute_insn();
+    for i in 0..0x10usize {
+        assert_eq!(c.mem[i], c.v[i]);
+    }
+    assert_eq!(c.pc, 2);
+}
