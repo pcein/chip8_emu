@@ -4,8 +4,13 @@
 /// (1) <http://devernay.free.fr/hacks/chip8/C8TECH10.HTM>
 /// (2) <https://en.wikipedia.org/wiki/CHIP-8>
 
+use std::io;
+use std::io::prelude::*;
+use std::fs::File;
 use std::collections::HashMap;
 use rand;
+
+use screen;
 
 /// CHIP-8 Memory is 4K bytes in size
 const MEM_SIZE: usize = 4096;
@@ -26,6 +31,10 @@ const NUM_REGS: usize = 16;
 /// to by the stack pointer. The first push operation (after reset)
 /// should store the value at 0xea0.
 const SP_BOTTOM: usize = 0xe9e;
+
+/// Machine code is stored in memory starting at location
+/// 0x200.
+const PC_START: usize = 0x200;
 
 /// The Instruction Pointer type 
 type InsnPtr = fn(&mut CPU) -> ();
@@ -48,17 +57,21 @@ struct CPU {
     /// The Stack Pointer, not directly accessible 
     /// from CHIP-8 programs.
     sp: usize,
+
+    screen: Option<screen::Screen>,
+
 } 
 
 impl CPU {
 
-    fn new() -> Self {
+    fn new(screen: Option<screen::Screen>) -> Self {
         CPU { 
             mem: [0; MEM_SIZE],
             v: [0; NUM_REGS],
             i: 0,
-            pc: 0,
+            pc: PC_START,
             sp: SP_BOTTOM,
+            screen: screen,
         }
     }
 
@@ -395,6 +408,80 @@ impl CPU {
         }
         self.inc_pc(1);
     }
+    
+
+    /// Draw a sprite on the screen at location (v[x], v[y]). 
+    /// 
+    /// This instruction has the form: "dxyn". A sprite has a
+    /// width of 8 pixels and height (rows) of "n" pixels. Each pixel
+    /// is either ON or OFF, so, it can be encoded as either 1 or
+    /// 0, a single bit. A byte can thus hold one row of a sprite,
+    /// the leftmost (most significant) bit representing the value
+    /// of the first pixel on the row, and so on. "n" such bytes
+    /// will represent a single sprite. These bytes are stored 
+    /// starting at the memory location whose address is stored in the 
+    /// "i" register.
+    /// 
+    /// v[f] is set to 1 if any screen pixels are flipped from set to 
+    /// unset, it is otherwise set to 0.
+    /// 
+    /// A pixel is drawn by Xoring it to the value already present on
+    /// the screen at that location.
+    /// 
+    /// References:
+    /// (1) <http://www.emulator101.com/chip-8-sprites.html>
+    /// (2) <http://tibasicdev.wikidot.com/68k:sprites> (Explains the Xor logic)
+    fn draw_sprite(&mut self) {
+        let (x, y) = (self.v[self.nibble_x()], self.v[self.nibble_y()]);
+        let n = usize::from(self.mem[self.pc + 1] & 0xf);
+        if let Some(ref mut scr) = self.screen {
+            for y_index in 0usize .. n {
+                let val = self.mem[self.i + y_index];
+                CPU::draw_sprite_row(
+                    scr,    
+                    val, u32::from(x), 
+                    (u32::from(y) + y_index as u32) % (screen::SCREEN_HEIGHT as u32));
+            }
+        } else {
+            panic!("Error: screen not attached!")
+        }
+    }
+
+    /// Draw a row of the sprite at position x, y.
+    /// 
+    /// "val" represents the byte to be drawn.
+    /// Each bit of "val", starting from the leftmost
+    /// one, will be plotted at (x, y), (x+1, y), (x+2, y)
+    /// etc. If "x" exceeds the screen width, it will wrap
+    /// to 0.
+    /// 
+    /// Pixel plotting is done by Xoring the current pixel
+    /// color with the sprite color.
+    fn draw_sprite_row(scr: &mut screen::Screen, val: u8, x: u32, y: u32) {
+        for i in 0..8 {
+            let current_color = scr.get_pixel(x + i, y);
+            let sprite_color = (val >> (7 - i)) & 1;
+            let new_color = current_color ^ sprite_color;
+            scr.draw_pixel(x + i, y, screen::PIXEL_COLORS[new_color as usize]);
+        }
+    }
+
+    fn load_rom(&mut self, filename: &str, offset: usize) {
+        let mut f = File::open(filename).
+                    expect(&format!("load_rom: failed to load {}", filename));
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).expect("load_rom: failed to read from file");
+        for (index, val) in buf.iter().enumerate() {
+            self.mem[offset + index] = *val;
+        }
+
+
+
+
+
+
+        
+    }
 
     /// Execute the instruction pointed to by the PC.
     fn execute_insn(&mut self) {
@@ -440,6 +527,7 @@ lazy_static! {
         0xa => CPU::assign_address_to_ireg as InsnPtr,
         0xb => CPU::jmp_to_address_plus_v0 as InsnPtr,
         0xc => CPU::assign_rand_bitand_const_to_vx as InsnPtr,
+        0xd => CPU::draw_sprite as InsnPtr,
     };
 }
 

@@ -1,10 +1,12 @@
 
 use super::*;
 
+/// Tests all instructions except those doing I/O.
 
 #[test]
 fn test_jump(){
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x1055
     // Jump to 0x55
     c.mem[0] = 0x10;
@@ -15,7 +17,8 @@ fn test_jump(){
 
 #[test]
 fn test_call() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x2134
     // Call subroutine at 0x134
     c.mem[0] = 0x21;
@@ -29,7 +32,8 @@ fn test_call() {
 
 #[test]
 fn test_ret() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x2134
     // Call subroutine at 0x134
     c.mem[0] = 0x21;
@@ -48,7 +52,8 @@ fn test_ret() {
 
 #[test]
 fn test1_skip_if_vx_eq_nn() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x3a24
     // Skip next instruction if self.v[0xa] == 0x24
 
@@ -62,7 +67,8 @@ fn test1_skip_if_vx_eq_nn() {
 
 #[test]
 fn test2_skip_if_vx_eq_nn() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x3a24
     // Skip next instruction if self.v[0xa] == 0x24
 
@@ -76,7 +82,8 @@ fn test2_skip_if_vx_eq_nn() {
 
 #[test]
 fn test1_skip_if_vx_ne_nn() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x4a24
     // Skip next instruction if self.v[0xa] != 0x24
 
@@ -90,7 +97,8 @@ fn test1_skip_if_vx_ne_nn() {
 
 #[test]
 fn test2_skip_if_vx_ne_nn() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x4a24
     // Skip next instruction if self.v[0xa] == 0x24
 
@@ -104,7 +112,8 @@ fn test2_skip_if_vx_ne_nn() {
 
 #[test]
 fn test1_skip_if_vx_eq_vy() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x52b0
     // Skip next instruction if self.v[0x2] == self.v[0xb]
 
@@ -119,7 +128,8 @@ fn test1_skip_if_vx_eq_vy() {
 
 #[test]
 fn test2_skip_if_vx_eq_vy() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x52b0
     // Skip next instruction if self.v[0x2] == self.v[0xb]
 
@@ -134,7 +144,8 @@ fn test2_skip_if_vx_eq_vy() {
 
 #[test]
 fn test_set_vx_to_nn() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x6c2b
     // Set self.v[0xc] to 0x2b
 
@@ -148,7 +159,8 @@ fn test_set_vx_to_nn() {
 
 #[test]
 fn test_add_nn_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x7405
     // Add 0x5 to self.v[0x4] without changing carry.
 
@@ -165,7 +177,8 @@ fn test_add_nn_to_vx() {
 
 #[test]
 fn test_assign_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x82b0
     // v[2] = v[0xb]
 
@@ -182,7 +195,8 @@ fn test_assign_vy_to_vx() {
 
 #[test]
 fn test_assign_vx_or_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x85c1
     // v[5] = v[5] | v[0xc]
 
@@ -198,7 +212,8 @@ fn test_assign_vx_or_vy_to_vx() {
 
 #[test]
 fn test_assign_vx_and_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Insruction: 0x85c2
     // v[5] = v[5] & v[0xc] 
 
@@ -214,7 +229,8 @@ fn test_assign_vx_and_vy_to_vx() {
 
 #[test]
 fn test_assign_vx_xor_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x85c3
     // v[5] = v[5] ^ v[0xc]
 
@@ -230,7 +246,8 @@ fn test_assign_vx_xor_vy_to_vx() {
 
 #[test]
 fn test1_assign_vx_plus_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x85c4
     // v[5] = v[5] + v[0xc]
 
@@ -247,7 +264,8 @@ fn test1_assign_vx_plus_vy_to_vx() {
 
 #[test]
 fn test2_assign_vx_plus_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x85c4
     // v[5] = v[5] + v[0xc]
 
@@ -264,7 +282,8 @@ fn test2_assign_vx_plus_vy_to_vx() {
 
 #[test] 
 fn test1_assign_vx_minus_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x89d5
     // v[9] = v[9] - v[0xd]
 
@@ -281,7 +300,8 @@ fn test1_assign_vx_minus_vy_to_vx() {
 
 #[test] 
 fn test2_assign_vx_minus_vy_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x89d5
     // v[9] = v[9] - v[0xd]
 
@@ -298,7 +318,8 @@ fn test2_assign_vx_minus_vy_to_vx() {
 
 #[test]
 fn test_shr_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x8706
     // v[7] = v[7] >> 1
 
@@ -314,7 +335,8 @@ fn test_shr_vx() {
 
 #[test]
 fn test1_assign_vy_minus_vx_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x89e7
     // v[9] = v[0xe] - v[0x9]
 
@@ -332,7 +354,8 @@ fn test1_assign_vy_minus_vx_to_vx() {
 
 #[test]
 fn test2_assign_vy_minus_vx_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x89e7
     // v[9] = v[0xe] - v[0x9]
 
@@ -350,7 +373,8 @@ fn test2_assign_vy_minus_vx_to_vx() {
 
 #[test]
 fn test_shl_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x870e
     // v[7] = v[7] << 1
 
@@ -365,7 +389,8 @@ fn test_shl_vx() {
 
 #[test]
 fn test1_skip_if_vx_ne_vy() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x9560
     // skip if v[5] != v[6]
 
@@ -380,7 +405,8 @@ fn test1_skip_if_vx_ne_vy() {
 
 #[test]
 fn test2_skip_if_vx_ne_vy() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0x9560
     // skip if v[5] != v[6]
 
@@ -395,7 +421,8 @@ fn test2_skip_if_vx_ne_vy() {
 
 #[test]
 fn test_assign_address_to_ireg() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xa123
     // i = 0x123
 
@@ -409,7 +436,8 @@ fn test_assign_address_to_ireg() {
 
 #[test]
 fn test_jmp_to_address_plus_v0() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xb123
     // pc = 0x123 + v[0]
 
@@ -423,7 +451,8 @@ fn test_jmp_to_address_plus_v0() {
 
 #[test]
 fn test_assign_rand_bitand_const_to_vx() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xc75a
     // v[7] = rand() & 0x5a
     // When the test code is being executed,
@@ -439,7 +468,8 @@ fn test_assign_rand_bitand_const_to_vx() {
 
 #[test]
 fn test_assign_i_plus_vx_to_i() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xf31e
     // i += v[3]
 
@@ -455,7 +485,8 @@ fn test_assign_i_plus_vx_to_i() {
 
 #[test]
 fn test_store_bcd_of_vx_to_mem() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xf133
     
     c.i = 6;
@@ -472,7 +503,8 @@ fn test_store_bcd_of_vx_to_mem() {
 
 #[test]
 fn test_store_v0_to_vx_to_mem() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xff55
     // Store v[0] to v[0xf] to mem,
     // starting from c.mem[c.i]
@@ -493,7 +525,8 @@ fn test_store_v0_to_vx_to_mem() {
 
 #[test]
 fn test_fill_v0_to_vx_from_mem() {
-    let mut c = CPU::new();
+    let mut c = CPU::new(None);
+    c.pc = 0;
     // Instruction: 0xff65
     // Store from c.mem[i], c.mem[i+1], ..., c.mem[i+0xf]
     // to c.v[0], c.v[1], ..., c.v[0xf]

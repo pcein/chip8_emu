@@ -10,10 +10,10 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 
 /// Default screen height in pixels
-const SCREEN_HEIGHT:u16 = 32;
+pub const SCREEN_HEIGHT:u16 = 32;
 
 /// Default screen width in pixels
-const SCREEN_WIDTH:u16 = 64;
+pub const SCREEN_WIDTH:u16 = 64;
 
 /// Screen depth in pixels
 const SCREEN_DEPTH:u8 = 8;
@@ -76,8 +76,8 @@ impl Screen {
                 x as i32 * self.scale_factor as i32, 
                 y as i32 * self.scale_factor as i32,
                 self.scale_factor, self.scale_factor)).expect("Error in draw_point");
-        self.mem[(y * u32::from(SCREEN_WIDTH) + x) as usize] = 1;
-        self.canvas.present();
+        let c = if color == PIXEL_COLORS[0] { 0 } else { 1 };
+        self.mem[(y * u32::from(SCREEN_WIDTH) + x) as usize] = c;
     }
 
     pub fn get_pixel(&mut self, x: u32, y: u32) -> u8 {
