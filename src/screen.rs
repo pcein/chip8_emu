@@ -1,5 +1,7 @@
 // screen.rs
 
+use std::collections::HashMap;
+
 use sdl2;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -8,6 +10,8 @@ use sdl2::rect::Rect;
 use sdl2::EventPump;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
+use sdl2::keyboard::Keycode;
+use sdl2::event::Event;
 
 /// Default screen height in pixels
 pub const SCREEN_HEIGHT:u16 = 32;
@@ -17,6 +21,29 @@ pub const SCREEN_WIDTH:u16 = 64;
 
 /// Screen depth in pixels
 const SCREEN_DEPTH:u8 = 8;
+
+/// CHIP-8 uses keys from 0,1,...9 and a, b, ... f.
+/// These are assigned codes from 0, 1, ... 0xf.
+lazy_static! {
+    pub static ref KEYCODES:HashMap<u8, Keycode> = hashmap! {
+         0x0 => Keycode::Num0,
+         0x1 => Keycode::Num1,
+         0x2 => Keycode::Num2,
+         0x3 => Keycode::Num3,
+         0x4 => Keycode::Num4,
+         0x5 => Keycode::Num5,
+         0x6 => Keycode::Num6,
+         0x7 => Keycode::Num7,
+         0x8 => Keycode::Num8,
+         0x9 => Keycode::Num9,
+         0xa => Keycode::A,
+         0xb => Keycode::B,
+         0xc => Keycode::C,
+         0xd => Keycode::D,
+         0xe => Keycode::E,
+         0xf => Keycode::F,
+    };
+}
 
 /// CHIP-8 uses only two colors: 0 for OFF and
 /// 1 for ON.
@@ -30,8 +57,8 @@ pub struct Screen {
     width: u32,
     height: u32,
     scale_factor: u32,
-    canvas: Canvas<Window>,
-    events: EventPump,
+    pub canvas: Canvas<Window>,
+    pub events: EventPump,
     /// `mem' is a representation of the display within the
     /// virtual machine. If mem[i] is 1, the corresponding 
     /// pixel on the real screen is ON, otherwise OFF.
@@ -78,6 +105,43 @@ impl Screen {
                 self.scale_factor, self.scale_factor)).expect("Error in draw_point");
         let c = if color == PIXEL_COLORS[0] { 0 } else { 1 };
         self.mem[(y * u32::from(SCREEN_WIDTH) + x) as usize] = c;
+    }
+
+    /// Map an SDL Keycode to the numeric key value used
+    /// by CHIP-8.
+    fn keycode_to_keyval(k: Keycode) -> Option<u8> {
+        for (chip8_val, sdl_code) in KEYCODES.iter() {
+            if *sdl_code == k {
+                return Some(*chip8_val);
+            }
+        }
+        None
+    }
+
+    /// Do a blocking read from the keyboard. Return the
+    /// associated CHIP-8 key value if a keypress is 
+    /// detected and the pressed key is valid.
+    pub fn read_key_blocking(&mut self) -> Option<u8> {
+        let e = self.events.wait_event();
+        match e {
+            Event::KeyDown { keycode: Some(k), ..} => Screen::keycode_to_keyval(k),
+            _ => None,
+        }
+    }
+
+    /// Do a non-blocking read from the keyboard. Return
+    /// the associated CHIP-8 key value if a keypress is
+    /// detected and the pressed key is valid.
+    pub fn read_key_noblocking(&mut self) -> Option<u8> {
+        if let Some(e) = self.events.poll_event() {
+            match e {
+                Event::KeyDown { keycode: Some(k), ..} =>
+                        Screen::keycode_to_keyval(k),
+                _ => None,
+            }
+        } else {
+            None
+        }
     }
 
     pub fn get_pixel(&mut self, x: u32, y: u32) -> u8 {

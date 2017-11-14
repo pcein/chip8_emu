@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use rand;
 
 use screen;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
 /// CHIP-8 Memory is 4K bytes in size
 const MEM_SIZE: usize = 4096;
@@ -34,37 +36,44 @@ const SP_BOTTOM: usize = 0xe9e;
 
 /// Machine code is stored in memory starting at location
 /// 0x200.
-const PC_START: usize = 0x200;
+pub const PC_START: usize = 0x200;
 
 /// The Instruction Pointer type 
 type InsnPtr = fn(&mut CPU) -> ();
 
-struct CPU {
+pub struct CPU {
     /// 4K Memory. 2 byte objects are stored in big-endian
     /// format.
-    mem: [u8; MEM_SIZE],
+    pub mem: [u8; MEM_SIZE],
     
     /// The 16 general purpose registers, 8 bits wide.
-    v: [u8; NUM_REGS],
+    pub v: [u8; NUM_REGS],
 
     /// The address register.
-    i: usize,
+    pub i: usize,
 
     /// The Program Counter, not directly accessible
     /// from CHIP-8 programs.
-    pc: usize,
+    pub pc: usize,
 
     /// The Stack Pointer, not directly accessible 
     /// from CHIP-8 programs.
     sp: usize,
 
+    /// The CPU has a screen attached to it. During
+    /// unit tests, the value of this field will be None.
     screen: Option<screen::Screen>,
+
+    /// The delay timer.
+    delay: u8,
+
+    /// The sound timer.
+    sound: u8,
 
 } 
 
 impl CPU {
-
-    fn new(screen: Option<screen::Screen>) -> Self {
+    pub fn new(screen: Option<screen::Screen>) -> Self {
         CPU { 
             mem: [0; MEM_SIZE],
             v: [0; NUM_REGS],
@@ -72,6 +81,8 @@ impl CPU {
             pc: PC_START,
             sp: SP_BOTTOM,
             screen: screen,
+            delay: 0,
+            sound: 0,
         }
     }
 
@@ -432,19 +443,27 @@ impl CPU {
     /// (1) <http://www.emulator101.com/chip-8-sprites.html>
     /// (2) <http://tibasicdev.wikidot.com/68k:sprites> (Explains the Xor logic)
     fn draw_sprite(&mut self) {
+        let mut flipped = false;
+        let mut r:bool;
         let (x, y) = (self.v[self.nibble_x()], self.v[self.nibble_y()]);
         let n = usize::from(self.mem[self.pc + 1] & 0xf);
         if let Some(ref mut scr) = self.screen {
             for y_index in 0usize .. n {
                 let val = self.mem[self.i + y_index];
-                CPU::draw_sprite_row(
-                    scr,    
-                    val, u32::from(x), 
-                    (u32::from(y) + y_index as u32) % (screen::SCREEN_HEIGHT as u32));
+                r = CPU::draw_sprite_row(
+                        scr,    
+                        val, u32::from(x), 
+                        (u32::from(y) + y_index as u32) % (screen::SCREEN_HEIGHT as u32));
+                if r { flipped = true; }
+            }
+            scr.canvas.present();
+            if flipped { 
+                self.v[0xf] = 1;
             }
         } else {
             panic!("Error: screen not attached!")
         }
+        self.inc_pc(1);
     }
 
     /// Draw a row of the sprite at position x, y.
@@ -457,16 +476,113 @@ impl CPU {
     /// 
     /// Pixel plotting is done by Xoring the current pixel
     /// color with the sprite color.
-    fn draw_sprite_row(scr: &mut screen::Screen, val: u8, x: u32, y: u32) {
+    fn draw_sprite_row(scr: &mut screen::Screen, val: u8, x: u32, y: u32) -> bool {
+        let mut flipped = false;
         for i in 0..8 {
             let current_color = scr.get_pixel(x + i, y);
             let sprite_color = (val >> (7 - i)) & 1;
             let new_color = current_color ^ sprite_color;
+            if (current_color == 1) && (new_color == 0) {
+                flipped = true;
+            } 
             scr.draw_pixel(x + i, y, screen::PIXEL_COLORS[new_color as usize]);
+        }
+        flipped
+    }
+
+    /// Get key press. Pressed key stored in v[x]. Operation
+    /// is blocking.
+    /// 
+    /// This instruction has the form "fx0a".
+    fn get_key(&mut self) {
+        let x = self.nibble_x();
+        if let Some(ref mut scr) = self.screen {
+            self.v[x] = scr.read_key_blocking().expect("error: invalid key pressed!");
+        } else {
+            panic!("get_key: screen not attached!")
         }
     }
 
-    fn load_rom(&mut self, filename: &str, offset: usize) {
+    /// Skip the next instruction if the read key
+    /// is equal to the one whose code is stored in
+    /// v[x].
+    /// 
+    /// This instruction has the form: "ex9e".
+    fn skip_if_key_eq_vx(&mut self) {
+        let x = self.nibble_x();
+        let mut n = 1;
+        if let Some(ref mut scr) = self.screen {
+            let key = scr.read_key_noblocking();
+            if let Some(k) = key {
+                if k == self.v[x] {
+                    n = 2; // skip next instruction
+                }
+            }
+        } else {
+            panic!("error: screen not attached!");
+        }
+        self.inc_pc(n);
+    }
+
+    /// Skip the next instruction if the read key
+    /// is not equal to the one whose code is stored
+    /// in v[x].
+    /// 
+    /// This instruction has the form: "exa1".
+    fn skip_if_key_ne_vx(&mut self) {
+        let x = self.nibble_x();
+        let mut n = 2;
+        if let Some(ref mut scr) = self.screen {
+            let key = scr.read_key_noblocking();
+            if let Some(k) = key {
+                if k == self.v[x] {
+                    n = 1; // don't skip next instruction
+                }
+            }
+        } else {
+            panic!("error: screen not attached!");
+        }
+        self.inc_pc(n);
+    }
+
+    /// Set v[x] to value of delay timer register.
+    /// 
+    /// This instruction has the form: "fx07".
+    fn copy_delay_reg_to_vx(&mut self){
+        self.mem[self.nibble_x()] = self.delay;
+        self.inc_pc(1);
+    }
+
+    /// Copy the value in v[x] to the delay timer register.
+    /// 
+    /// This instruction has the form: "fx15".
+    fn copy_vx_to_delay_reg(&mut self){
+        self.delay = self.mem[self.nibble_x()];
+        self.inc_pc(1);
+    }
+
+    /// Copy the value in v[x] to the sound timer register.
+    /// 
+    /// This instruction has the form: "fx18".
+    fn copy_vx_to_sound_reg(&mut self){
+        self.sound = self.mem[self.nibble_x()];
+        self.inc_pc(1);
+    }
+
+    /// Set the "i" register to address of the sprite
+    /// character stored in v[x]. The sprite characters
+    /// are from 0 to 0xf. Each character is represented
+    /// by 5 bytes in memory.
+    /// 
+    /// This instruction has the form: "fx29".
+    fn set_ireg_to_sprite_address(&mut self){
+        self.i = usize::from(self.v[self.nibble_x()] * 5);
+        self.inc_pc(1);
+    } 
+
+    /// Load program code / font data into memory starting
+    /// at the location mem[offset].
+    pub fn load_rom(&mut self, filename: &str, offset: usize) {
         let mut f = File::open(filename).
                     expect(&format!("load_rom: failed to load {}", filename));
         let mut buf = Vec::new();
@@ -474,21 +590,42 @@ impl CPU {
         for (index, val) in buf.iter().enumerate() {
             self.mem[offset + index] = *val;
         }
-
-
-
-
-
-
-        
     }
 
     /// Execute the instruction pointed to by the PC.
-    fn execute_insn(&mut self) {
+    pub fn execute_insn(&mut self) {
+        // Return from subroutine.
+        // Instruction: 0x00ee
         if (self.mem[self.pc] == 0x0) && (self.mem[self.pc + 1] == 0xee) {
             self.ret();
             return;
         }
+        // Clear the screen.
+        // Instruction format: 0x00e0
+        if (self.mem[self.pc] == 0x0) && (self.mem[self.pc + 1] == 0xe0) {
+            if let Some(ref mut scr) = self.screen {
+                scr.canvas.set_draw_color(screen::PIXEL_COLORS[0]);
+                scr.canvas.clear();
+            } else {
+                panic!("Error: screen not attached!");
+            }
+            return;    
+        }
+        // Skip next instruction if key whose code is stored in
+        // v[x] is pressed.
+        if (((self.mem[self.pc] >> 4) & 0xf) == 0xe) && 
+            (self.mem[self.pc + 1] == 0x9e) {
+                self.skip_if_key_eq_vx();
+                return;
+        }
+        // Skip next instruction if key whose code is stored in 
+        // v[x] is not pressed.
+        if (((self.mem[self.pc] >> 4) & 0xf) == 0xe) &&
+            (self.mem[self.pc + 1] == 0xa1) {
+                self.skip_if_key_ne_vx();
+                return;
+            }
+
         // Get the leftmost nibble
         let t = (self.mem[self.pc] >> 4) & 0xf;
         if ((t >= 1) && (t <= 7)) || ((t >= 9) && (t <= 0xd)) {
@@ -559,6 +696,11 @@ lazy_static! {
         0x33 => CPU::store_bcd_of_vx_to_mem as InsnPtr,
         0x55 => CPU::store_v0_to_vx_to_mem as InsnPtr,
         0x65 => CPU::fill_v0_to_vx_from_mem as InsnPtr,
+        0x0A => CPU::get_key as InsnPtr,
+        0x07 => CPU::copy_delay_reg_to_vx as InsnPtr,
+        0x15 => CPU::copy_vx_to_delay_reg as InsnPtr,
+        0x18 => CPU::copy_vx_to_sound_reg as InsnPtr,
+        0x29 => CPU::set_ireg_to_sprite_address as InsnPtr,
     };
 }
 
