@@ -4,15 +4,12 @@
 /// (1) <http://devernay.free.fr/hacks/chip8/C8TECH10.HTM>
 /// (2) <https://en.wikipedia.org/wiki/CHIP-8>
 
-use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::HashMap;
 use rand;
 
 use screen;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 
 /// CHIP-8 Memory is 4K bytes in size
 const MEM_SIZE: usize = 4096;
@@ -44,17 +41,17 @@ type InsnPtr = fn(&mut CPU) -> ();
 pub struct CPU {
     /// 4K Memory. 2 byte objects are stored in big-endian
     /// format.
-    pub mem: [u8; MEM_SIZE],
+    mem: [u8; MEM_SIZE],
     
     /// The 16 general purpose registers, 8 bits wide.
-    pub v: [u8; NUM_REGS],
+    v: [u8; NUM_REGS],
 
     /// The address register.
-    pub i: usize,
+    i: usize,
 
     /// The Program Counter, not directly accessible
     /// from CHIP-8 programs.
-    pub pc: usize,
+    pc: usize,
 
     /// The Stack Pointer, not directly accessible 
     /// from CHIP-8 programs.
@@ -447,13 +444,15 @@ impl CPU {
         let mut r:bool;
         let (x, y) = (self.v[self.nibble_x()], self.v[self.nibble_y()]);
         let n = usize::from(self.mem[self.pc + 1] & 0xf);
+
+        self.v[0xf] = 0;
         if let Some(ref mut scr) = self.screen {
             for y_index in 0usize .. n {
                 let val = self.mem[self.i + y_index];
                 r = CPU::draw_sprite_row(
                         scr,    
                         val, u32::from(x), 
-                        (u32::from(y) + y_index as u32) % (screen::SCREEN_HEIGHT as u32));
+                        (u32::from(y) + y_index as u32) % u32::from(screen::SCREEN_HEIGHT));
                 if r { flipped = true; }
             }
             scr.canvas.present();
@@ -479,13 +478,14 @@ impl CPU {
     fn draw_sprite_row(scr: &mut screen::Screen, val: u8, x: u32, y: u32) -> bool {
         let mut flipped = false;
         for i in 0..8 {
-            let current_color = scr.get_pixel(x + i, y);
+            let _x = (x + i) % u32::from(screen::SCREEN_WIDTH);
+            let current_color = scr.get_pixel(_x, y);
             let sprite_color = (val >> (7 - i)) & 1;
             let new_color = current_color ^ sprite_color;
             if (current_color == 1) && (new_color == 0) {
                 flipped = true;
             } 
-            scr.draw_pixel(x + i, y, screen::PIXEL_COLORS[new_color as usize]);
+            scr.draw_pixel(_x, y, screen::PIXEL_COLORS[new_color as usize]);
         }
         flipped
     }
@@ -501,6 +501,7 @@ impl CPU {
         } else {
             panic!("get_key: screen not attached!")
         }
+        self.inc_pc(1);
     }
 
     /// Skip the next instruction if the read key
@@ -549,7 +550,7 @@ impl CPU {
     /// 
     /// This instruction has the form: "fx07".
     fn copy_delay_reg_to_vx(&mut self){
-        self.mem[self.nibble_x()] = self.delay;
+        self.v[self.nibble_x()] = self.delay;
         self.inc_pc(1);
     }
 
@@ -557,7 +558,7 @@ impl CPU {
     /// 
     /// This instruction has the form: "fx15".
     fn copy_vx_to_delay_reg(&mut self){
-        self.delay = self.mem[self.nibble_x()];
+        self.delay = self.v[self.nibble_x()];
         self.inc_pc(1);
     }
 
@@ -565,7 +566,7 @@ impl CPU {
     /// 
     /// This instruction has the form: "fx18".
     fn copy_vx_to_sound_reg(&mut self){
-        self.sound = self.mem[self.nibble_x()];
+        self.sound = self.v[self.nibble_x()];
         self.inc_pc(1);
     }
 
@@ -592,6 +593,15 @@ impl CPU {
         }
     }
 
+    pub fn decrement_counters(&mut self) {
+        if self.sound > 0 {
+            self.sound -= 1;
+        }
+        if self.delay > 0 {
+            self.delay -= 1;
+        }
+    }
+
     /// Execute the instruction pointed to by the PC.
     pub fn execute_insn(&mut self) {
         // Return from subroutine.
@@ -609,6 +619,7 @@ impl CPU {
             } else {
                 panic!("Error: screen not attached!");
             }
+            self.inc_pc(1);
             return;    
         }
         // Skip next instruction if key whose code is stored in

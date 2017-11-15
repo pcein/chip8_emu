@@ -1,44 +1,43 @@
 
-#![allow(dead_code)]
 
 mod cpu;
 mod screen;
+mod chip8;
 
 extern crate rand;
 extern crate sdl2;
+extern crate structopt;
+
+#[macro_use]
+extern crate structopt_derive;
 
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate maplit;
 
-static FONT_FILE: &'static str = "FONTS.chip8";
+use structopt::StructOpt;
+
+#[derive(StructOpt, Debug)]
+struct Opt {
+    #[structopt(long = "fontfile", help = "Name of the file containing fonts")]
+    font_file: String,
+    #[structopt(long = "gamefile", help = "Name of the file containing game code")]
+    game_file: String,
+    #[structopt(long = "scale", help = "The scale factor of the Window. Default is 5")]
+    scale_factor: Option<u32>,
+}
+
+
 
 fn main() {
-    println!("Hello, world!");
-    let  s = screen::Screen::new(
-        u32::from(screen::SCREEN_WIDTH), 
-        u32::from(screen::SCREEN_HEIGHT), 
-        5);
+    let opt = Opt::from_args();
+    let mut scale_factor: u32 = screen::DEFAULT_SCALE_FACTOR; 
 
-    let mut c = cpu::CPU::new(Some(s));
-    c.load_rom(FONT_FILE, 0);
-    c.load_rom("PONG", cpu::PC_START );
-
-//    c.mem[cpu::PC_START] = 0xf0;
-//    c.mem[cpu::PC_START + 1] = 0x0a; 
-    c.execute_insn();
-
-     loop {
-        c.execute_insn();
-        if (c.mem[c.pc] == 0x0) && (c.mem[c.pc + 1] == 0xfd ) {
-            break;
-        }
+    if let Some(s) = opt.scale_factor {
+        scale_factor = s;
     }
- 
-    loop {
 
-    }
-    
-    
+    chip8::chip8_run(&opt.font_file, &opt.game_file, scale_factor);
+
 }

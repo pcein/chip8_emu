@@ -19,13 +19,14 @@ pub const SCREEN_HEIGHT:u16 = 32;
 /// Default screen width in pixels
 pub const SCREEN_WIDTH:u16 = 64;
 
-/// Screen depth in pixels
-const SCREEN_DEPTH:u8 = 8;
+pub const DEFAULT_SCALE_FACTOR: u32 = 5;
+
+static WINDOW_TITLE: &'static str = "CHIP-8 Demo!";
 
 /// CHIP-8 uses keys from 0,1,...9 and a, b, ... f.
 /// These are assigned codes from 0, 1, ... 0xf.
 lazy_static! {
-    pub static ref KEYCODES:HashMap<u8, Keycode> = hashmap! {
+    static ref KEYCODES:HashMap<u8, Keycode> = hashmap! {
          0x0 => Keycode::Num0,
          0x1 => Keycode::Num1,
          0x2 => Keycode::Num2,
@@ -54,8 +55,6 @@ lazy_static! {
 }
 
 pub struct Screen {
-    width: u32,
-    height: u32,
     scale_factor: u32,
     pub canvas: Canvas<Window>,
     pub events: EventPump,
@@ -74,7 +73,7 @@ impl Screen {
         let ctxt = sdl2::init().expect("SDL2 library initialization failed.");
         let video = ctxt.video().expect("Unable to get video subsystem.");
         let window = 
-            video.window("CHIP-8 Demo!", width * scale_factor, height * scale_factor)
+            video.window(WINDOW_TITLE, width * scale_factor, height * scale_factor)
             .position_centered()
             .opengl()
             .build()
@@ -89,7 +88,6 @@ impl Screen {
         let events = ctxt.event_pump().expect("Unable to get event pump"); 
 
         Screen{ 
-            width: width, height: height,
             scale_factor: scale_factor,
             canvas: canvas, events: events,
             mem: [0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
@@ -122,10 +120,11 @@ impl Screen {
     /// associated CHIP-8 key value if a keypress is 
     /// detected and the pressed key is valid.
     pub fn read_key_blocking(&mut self) -> Option<u8> {
-        let e = self.events.wait_event();
-        match e {
-            Event::KeyDown { keycode: Some(k), ..} => Screen::keycode_to_keyval(k),
-            _ => None,
+        loop {
+            let e = self.events.wait_event();
+            if let Event::KeyDown { keycode: Some(k), ..} = e {
+                break Screen::keycode_to_keyval(k);
+            }
         }
     }
 
@@ -135,8 +134,9 @@ impl Screen {
     pub fn read_key_noblocking(&mut self) -> Option<u8> {
         if let Some(e) = self.events.poll_event() {
             match e {
-                Event::KeyDown { keycode: Some(k), ..} =>
-                        Screen::keycode_to_keyval(k),
+                Event::KeyDown { keycode: Some(k), ..} => {
+                        Screen::keycode_to_keyval(k)
+                },
                 _ => None,
             }
         } else {
